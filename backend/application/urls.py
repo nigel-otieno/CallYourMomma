@@ -9,6 +9,7 @@ urlpatterns = [
     path('checkout/', views.checkout_view, name='checkout'),
     path('create-checkout-session/', views.create_checkout_session, name='create_checkout_session'),
     path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
-
-    # path('thank-you/', views.thank_you_view, name='thank_you'),
+    path('stripe-webhook/', views.stripe_webhook, name='stripe_webhook'),
+    path('success/', views.success_view, name='success'),
+    path('thank-you/', views.thank_you_view, name='thank_you'),
 ]

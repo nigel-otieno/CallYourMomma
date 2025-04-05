@@ -1,0 +1,9 @@
+<h2>Thank you {{ user.first_name }}!</h2>
+<p>Here's a summary of your recent CallYourMomma order:</p>
+<ul>
+  {% for item in cart_items %}
+    <li>{{ item.product.name }} (x{{ item.quantity }}) — ${{ item.total_price|floatformat:2 }}</li>
+  {% endfor %}
+</ul>
+<p><strong>Total:</strong> ${{ total|floatformat:2 }}</p>
+<p>We'll notify you when your order ships. Happy saucing! 🌶️</p>

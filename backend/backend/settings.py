@@ -52,8 +52,11 @@ AUTHENTICATION_BACKENDS = [
 LOGIN_REDIRECT_URL = '/'
 STRIPE_PUBLIC_KEY = 'pk_test_PvP3GWPvM6rYjeg12qugj4zv00L6LuJa0x'
 STRIPE_SECRET_KEY = 'sk_test_1EBa6aTxV4dG39OTRgH2N2d3006NgIuJt1'
-
+STRIPE_WEBHOOK_SECRET = 'whsec_9dd9516690c0567a3dcfdd95995b2565d6d2a630548f2bc0e95fcb4fe91109d7'
 STATICFILES_DIRS = [BASE_DIR / 'application' / 'static']
+
+# settings.py
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

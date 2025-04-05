@@ -1,5 +1,5 @@
 # views.py
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from .models import *
 from django.conf import settings
 import stripe
@@ -7,7 +7,9 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-
+import json
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -20,11 +22,15 @@ def shop_view(request):
     return render(request, 'application/shop.html', {'products': products})
 
 def success_view(request):
-    CartItem.objects.filter(user=request.user).delete()
-    return render(request, 'application/success.html')
+    cart = get_user_cart(request)
+    CartItem.objects.filter(cart=cart).delete()
+    return redirect('thank_you')
 
 def cancel_view(request):
     return render(request, 'application/cancel.html')
+
+def thank_you_view(request):
+    return render(request, 'application/thank_you.html')
 
 
 def get_user_cart(request):
@@ -61,24 +67,20 @@ def cart_view(request):
 def checkout_view(request):
     cart = get_user_cart(request)
     cart_items = CartItem.objects.filter(cart=cart)
-    if request.method == 'POST':
-        # dummy redirect for now
-        return redirect('thank_you')
+    total = sum(item.total_price for item in cart_items)
+
     return render(request, 'application/checkout.html', {
-        'cart_items': cart_items
+        'cart_items': cart_items,
+        'total': total,
+        'stripe_public_key': settings.STRIPE_PUBLIC_KEY
     })
 
 
 @csrf_exempt
 def create_checkout_session(request):
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    cart = get_user_cart(request)
+    cart_items = CartItem.objects.filter(cart=cart)
 
-    # Optional: identify user/cart from session or database
-    cart_id = request.session.get('cart_id')
-    if not cart_id:
-        return JsonResponse({'error': 'Cart not found'}, status=404)
-
-    cart_items = CartItem.objects.filter(cart_id=cart_id)
     line_items = [
         {
             'price_data': {
@@ -94,12 +96,16 @@ def create_checkout_session(request):
     ]
 
     session = stripe.checkout.Session.create(
-        payment_method_types=['card'],
-        line_items=line_items,
-        mode='payment',
-        success_url='http://localhost:8000/success/',
-        cancel_url='http://localhost:8000/cancel/',
+    payment_method_types=['card'],
+    line_items=line_items,
+    mode='payment',
+    success_url='http://localhost:8000/success/',
+    cancel_url='http://localhost:8000/cancel/',
+    metadata={
+        'cart_id': str(cart.id),
+    }
     )
+
 
     return JsonResponse({'id': session.id})
 
@@ -118,3 +124,73 @@ def update_cart_quantity(request):
         return JsonResponse({'status': 'ok', 'new_quantity': item.quantity})
     except CartItem.DoesNotExist:
         return JsonResponse({'status': 'error'}, status=404)
+    
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except ValueError:
+        return JsonResponse({'status': 'invalid payload'}, status=400)
+    except stripe.error.SignatureVerificationError:
+        return JsonResponse({'status': 'invalid signature'}, status=400)
+
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        cart_id = session.get('metadata', {}).get('cart_id')
+
+        if cart_id:
+            try:
+                cart = Cart.objects.get(id=cart_id)
+                cart_items = CartItem.objects.filter(cart=cart)
+                total = sum(item.total_price for item in cart_items)
+
+                if cart.user and cart.user.email:
+                    message = render_to_string('application/email_receipt.html', {
+                        'user': cart.user,
+                        'cart_items': cart_items,
+                        'total': total
+                    })
+                    send_mail(
+                        subject='Your CallYourMomma Order Confirmation',
+                        message='',
+                        from_email='noreply@callyourmomma.com',
+                        recipient_list=[cart.user.email],
+                        html_message=message
+                    )
+
+                cart_items.delete()
+
+            except Cart.DoesNotExist:
+                print("❌ Cart not found in webhook")
+
+    return JsonResponse({'status': 'success'})
+
+def thank_you_view(request):
+    cart = get_user_cart(request)
+    cart_items = CartItem.objects.filter(cart=cart)
+    total = sum(item.total_price for item in cart_items)
+
+    if request.user.is_authenticated and request.user.email:
+        message = render_to_string('application/email_receipt.html', {
+            'user': request.user,
+            'cart_items': cart_items,
+            'total': total
+        })
+        send_mail(
+            subject='Your CallYourMomma Order Confirmation',
+            message='',
+            from_email='noreply@callyourmomma.com',
+            recipient_list=[request.user.email],
+            html_message=message
+        )
+
+    cart_items.delete()
+
+    return render(request, 'application/thank_you.html', {
+        'cart_items': cart_items,
+        'total': total
+    })
