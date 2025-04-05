@@ -1,0 +1,41 @@
+{% extends 'application/base.html' %}
+{% block title %}Order History{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4 fw-bold">My Orders</h2>
+
+  {% if orders %}
+    <div class="table-responsive">
+      <table class="table table-bordered align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Order ID</th>
+            <th>Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+          <tr>
+            <td>{{ order.created_at|date:"M d, Y" }}</td>
+            <td>#{{ order.id }}</td>
+            <td>${{ order.total }}</td>
+            <td>
+              {% if order.paid %}
+                <span class="badge bg-success">Paid</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">You haven’t placed any orders yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
