@@ -128,46 +128,42 @@ def update_cart_quantity(request):
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except ValueError:
-        return JsonResponse({'status': 'invalid payload'}, status=400)
-    except stripe.error.SignatureVerificationError:
-        return JsonResponse({'status': 'invalid signature'}, status=400)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return HttpResponse(status=400)
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        cart_id = session.get('metadata', {}).get('cart_id')
+        cart_id = session['metadata'].get('cart_id')
+        try:
+            cart = Cart.objects.get(id=cart_id)
+            cart_items = CartItem.objects.filter(cart=cart)
 
-        if cart_id:
-            try:
-                cart = Cart.objects.get(id=cart_id)
-                cart_items = CartItem.objects.filter(cart=cart)
-                total = sum(item.total_price for item in cart_items)
+            # Send confirmation email
+            if cart.user and cart.user.email:
+                message = render_to_string('application/email_receipt.html', {
+                    'user': cart.user,
+                    'cart_items': cart_items,
+                    'total': sum(item.total_price for item in cart_items)
+                })
+                send_mail(
+                    subject='Your CallYourMomma Order Confirmation',
+                    message='',
+                    from_email='noreply@callyourmomma.com',
+                    recipient_list=[cart.user.email],
+                    html_message=message
+                )
 
-                if cart.user and cart.user.email:
-                    message = render_to_string('application/email_receipt.html', {
-                        'user': cart.user,
-                        'cart_items': cart_items,
-                        'total': total
-                    })
-                    send_mail(
-                        subject='Your CallYourMomma Order Confirmation',
-                        message='',
-                        from_email='noreply@callyourmomma.com',
-                        recipient_list=[cart.user.email],
-                        html_message=message
-                    )
+            cart_items.delete()  # Clear the cart after processing
 
-                cart_items.delete()
+        except Cart.DoesNotExist:
+            return HttpResponse(status=404)
 
-            except Cart.DoesNotExist:
-                print("❌ Cart not found in webhook")
-
-    return JsonResponse({'status': 'success'})
+    return HttpResponse(status=200)
 
 def thank_you_view(request):
     cart = get_user_cart(request)
@@ -187,8 +183,6 @@ def thank_you_view(request):
             recipient_list=[request.user.email],
             html_message=message
         )
-
-    cart_items.delete()
 
     return render(request, 'application/thank_you.html', {
         'cart_items': cart_items,
