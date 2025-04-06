@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import *
 
 urlpatterns = [
     path('', views.home_view, name='home'),
@@ -12,4 +13,7 @@ urlpatterns = [
     path('stripe-webhook/', views.stripe_webhook, name='stripe_webhook'),
     path('success/', views.success_view, name='success'),
     path('thank-you/', views.thank_you_view, name='thank_you'),
+    path('cart/count/', cart_count_api, name='cart_count_api'),
+    path('add-to-cart-ajax/<int:product_id>/', views.add_to_cart_ajax, name='add_to_cart_ajax'),
+
 ]

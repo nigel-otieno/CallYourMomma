@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 import json
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.views.decorators.http import require_GET
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -188,3 +189,23 @@ def thank_you_view(request):
         'cart_items': cart_items,
         'total': total
     })
+
+def cart_count_api(request):
+    user = request.user if request.user.is_authenticated else None
+    session_key = request.session.session_key
+
+    cart = Cart.objects.filter(user=user).first() if user else Cart.objects.filter(session_key=session_key).first()
+    count = sum(item.quantity for item in cart.items.all()) if cart else 0
+    return JsonResponse({"count": count})
+
+@require_GET
+def add_to_cart_ajax(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    cart = get_user_cart(request)
+    cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+    if not created:
+        cart_item.quantity += 1
+        cart_item.save()
+
+    count = sum(item.quantity for item in cart.items.all())
+    return JsonResponse({"status": "ok", "count": count})

@@ -188,6 +188,24 @@
     });
   });
 </script>
+<script>
+  async function addToCart(productId) {
+    try {
+      const res = await fetch(`/add-to-cart-ajax/${productId}/`, {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        document.getElementById("cart-count").textContent = data.count;
+      }
+    } catch (err) {
+      console.error("Cart add failed", err);
+    }
+  }
+</script>
 
 </body>
 </html>
