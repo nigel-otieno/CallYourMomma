@@ -1,0 +1,54 @@
+{% load static %}
+<style>
+    .product-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-radius: 12px;
+        padding: 20px;
+        background-color: #fffffff9;
+    }
+  
+    .product-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        background-color: #D98324;
+    }
+  
+    .product-section { 
+        background: #f8f9fa; padding: 60px 0; 
+    }
+
+</style>
+<section id="shop" class="product-section py-5" style="background-color: #F2F6D0;">
+    <div class="container">
+      <div class="row align-items-center">
+        
+        <!-- Text Column -->
+        <div class="col-md-4 mb-4 mb-md-0">
+            <h2 class="fw-bold text-dark mb-3">Crafted with Heat & Heart</h2>
+            <p class="text-muted mb-4">Every bottle of Call Your Momma sauce is a spicy love letter—handcrafted in small batches with bold peppers, bold flavor, and no compromises. From sweet heat to full-blown fire, we’ve got a flavor for every kind of spice lover.</p>
+            <a href="{% url 'shop' %}" class="btn btn-warning px-4 py-2">Explore Our Sauces</a>
+          </div>          
+  
+        <!-- Products -->
+        <div class="col-md-8">
+          <div class="row">
+            {% for product in products|slice:":3" %}
+              {% if product.id %}
+              <div class="col-4">
+                <div class="product-card text-center p-3 mb-4 border rounded-3 shadow-sm h-100" style="transition: all 0.3s ease;">
+                  <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid mb-3" style="max-height: 200px;">
+                  <h6 class="fw-semibold mb-1">{{ product.name }}</h6>
+                  <p class="fw-bold">${{ product.price|floatformat:2 }}</p>
+                  <form action="{% url 'add_to_cart' product.id %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" onclick="addToCart({{ product.id }})" class="btn btn-outline-dark btn-sm">Add to Cart</button>
+                  </form>
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
