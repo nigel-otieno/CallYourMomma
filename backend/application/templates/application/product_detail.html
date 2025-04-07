@@ -1,22 +1,19 @@
-{% extends 'application/base.html' %}
-{% block title %}{{ product.name }}{% endblock %}
+{% extends "application/base.html" %}
+{% block title %}{{ product.name }} – Furni Store{% endblock %}
 {% block content %}
-<div class="container mt-5">
-  <div class="row">
-    <div class="col-md-6">
-      {% if product.image %}
-        <img src="{{ product.image.url }}" class="img-fluid" alt="{{ product.name }}">
-      {% endif %}
-    </div>
-    <div class="col-md-6">
-      <h2>{{ product.name }}</h2>
-      <p>{{ product.description }}</p>
-      <h4>${{ product.price|floatformat:2 }}</h4>
-      <form action="{% url 'add_to_cart' product.id %}" method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-success">Add to Cart</button>
-      </form>
+<section class="product-detail py-5">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid rounded">
+      </div>
+      <div class="col-md-6">
+        <h2>{{ product.name }}</h2>
+        <p>{{ product.description }}</p>
+        <span class="fw-bold fs-4">${{ product.price }}</span>
+        <button class="btn btn-primary mt-3 add-to-cart" data-product-id="{{ product.id }}">Add to Cart</button>
+      </div>
     </div>
   </div>
-</div>
+</section>
 {% endblock %}

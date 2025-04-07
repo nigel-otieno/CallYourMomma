@@ -1,0 +1,59 @@
+/* === HERO FEATURE === */
+.hero {
+    background: url("/static/application/homebackground.png") no-repeat center center;
+    background-size: cover;
+    color: white;
+    padding: 120px 0 60px 0;
+    margin-top: -70px;
+    position: relative;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 0;
+  }
+  .hero .container { position: relative; z-index: 1; }
+  .hero img {
+    margin-top: 40px;
+    max-height: 480px;
+    width: 100%;
+    object-fit: contain;
+    opacity: 0.9;
+  }
+  .hero h1, .hero h3 { font-size: 2.2rem; font-weight: bold; }
+  .hero p { font-size: 1.1rem; margin-bottom: 30px; }
+  
+  @media (max-width: 768px) {
+    .hero h1, .hero h3 { font-size: 1.8rem; text-align: center; }
+    .hero p, .hero .btn, .hero .col-md-6 {
+      font-size: 1rem;
+      text-align: center !important;
+    }
+  }
+  
+  /* === PRODUCTS FEATURE === */
+  .product-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+    padding: 20px;
+    background-color: #fffffff9;
+  }
+  .product-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    background-color: #D98324;
+  }
+  .product-section {
+    background: #f8f9fa;
+    padding: 60px 0;
+  }
+  
+  /* === ACCORDION FAQ === */
+  .accordion-button {
+    background-color: var(--brand-cream);
+    font-weight: 500;
+  }
+  
