@@ -15,5 +15,7 @@ urlpatterns = [
     path('thank-you/', views.thank_you_view, name='thank_you'),
     path('cart/count/', cart_count_api, name='cart_count_api'),
     path('add-to-cart-ajax/<int:product_id>/', views.add_to_cart_ajax, name='add_to_cart_ajax'),
+    path('cart/update-variant/', views.update_cart_variant, name='update_cart_variant'),
+    path('remove-from-cart/', views.remove_from_cart, name='remove_from_cart'),
 
 ]

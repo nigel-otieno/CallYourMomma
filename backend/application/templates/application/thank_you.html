@@ -1,27 +1,40 @@
 {% extends "application/base.html" %}
-
 {% block content %}
 <div class="text-center" style="background-color: #ffffff; margin-top: 80px;">
   <h1 class="display-4 fw-bold text-success mb-4">Thank You!</h1>
-    <p class="lead">We've received your order. Here's a summary:</p>
-  
-    <div class="card shadow-sm mt-4 mx-auto" style="max-width: 600px;">
-      <div class="card-body">
-        <ul class="list-group list-group-flush mb-3">
-          {% for item in cart_items %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ item.product.name }} (x{{ item.quantity }})</span>
-              <span>${{ item.total_price|floatformat:2 }}</span>
-            </li>
-          {% endfor %}
-          <li class="list-group-item d-flex justify-content-between fw-bold">
-            <span>Total:</span>
-            <span>${{ total|floatformat:2 }}</span>
-          </li>
-        </ul>
-        <a href="{% url 'shop' %}" class="btn btn-outline-success w-100">Continue Shopping</a>
-      </div>
+  <p class="lead">We've received your order <strong>{{ email }}</strong>.</p>
+  <div class="card mt-4 mx-auto" style="max-width: 600px;">
+    <div class="card-body">
+      <h5 class="mb-3">Order placed by:</h5>
+      <p><strong>Name:</strong> {{ name }}</p>
+      <p><strong>Email:</strong> {{ email }}</p>
+      {% if address %}
+        <p><strong>Shipping Address:</strong><br>
+          {{ address.line1 }}<br>
+          {% if address.line2 %}{{ address.line2 }}<br>{% endif %}
+          {{ address.city }}, {{ address.state }} {{ address.postal_code }}<br>
+          {{ address.country }}
+        </p>
+      {% endif %}
     </div>
   </div>
   
-  {% endblock %}
+  <div class="card shadow-sm mt-4 mx-auto" style="max-width: 600px;">
+    <div class="card-body">
+      <ul class="list-group list-group-flush mb-3">
+        {% for item in items %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ item.name }} (x{{ item.quantity }})</span>
+            <span>${{ item.amount|floatformat:2 }}</span>
+          </li>
+        {% endfor %}
+        <li class="list-group-item d-flex justify-content-between fw-bold">
+          <span>Total:</span>
+          <span>${{ total|floatformat:2 }}</span>
+        </li>
+      </ul>
+      <a href="{% url 'shop' %}" class="btn btn-outline-success w-100">Continue Shopping</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

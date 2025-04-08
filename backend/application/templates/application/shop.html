@@ -1,5 +1,5 @@
 {% extends "application/base.html" %}
-
+{% load cart_tags %}
 {% block title %}Shop – Furni Store{% endblock %}
 
 {% block content %}
@@ -17,15 +17,15 @@
             <p class="fw-bold">${{ product.price|floatformat:2 }}</p>
           </div>
           <div class="card-footer bg-transparent border-0">
-            <form method="POST" action="{% url 'add_to_cart' product.id  %}">
-                {% csrf_token %}
-                <select name="variant_id" class="form-select mb-2">
-                  {% for variant in product.variants.all %}
-                    <option value="{{ variant.id }}">{{ variant.spice_level }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-warning btn-sm">Add to Cart</button>
-              </form>
+            <form method="POST" action="{% url 'add_to_cart' product.id %}">
+              {% csrf_token %}
+              <select name="variant" class="form-select mb-2">
+                <option value="MILD">Mild 🔥</option>
+                <option value="HOT">Hot 🔥🔥</option>
+                <option value="CYM">Call Your Momma 🔥🔥🔥</option>
+              </select>
+              <button type="submit" class="btn btn-warning btn-sm">Add to Cart</button>
+            </form>            
                      
           </div>
         </div>

@@ -1,10 +1,7 @@
----
-templates/application/cart.html
----
 {% extends "application/base.html" %}
 {% block title %}Your Cart – Furni Store{% endblock %}
 {% block content %}
-<section class="h-100 h-custom" style="background-color: #ffffff; margin-top: 80px;">
+<section class="pt-4 pb-5" style="background-color: #ffffff; ">
   <div class="container py-5 h-100">
     <div class="row d-flex justify-content-center align-items-center h-100">
       <div class="col-12">
@@ -19,28 +16,41 @@ templates/application/cart.html
                   </div>
                   <hr class="my-4">
 
-                  {% for item in cart_items %}
-                  <div class="row mb-4 d-flex justify-content-between align-items-center">
-                    <div class="col-md-2 col-lg-2 col-xl-2">
-                      <img src="{{ item.product.image.url }}" class="img-fluid rounded-3" alt="{{ item.product.name }}">
+                  {% regroup cart_items by product as product_list %}
+                  {% for group in product_list %}
+                    {% for item in group.list %}
+                    <div class="row mb-4 d-flex justify-content-between align-items-center" id="cart-item-{{ item.id }}">
+                      <div class="col-md-2 col-lg-2 col-xl-2">
+                        <img src="{{ item.product.image.url }}" class="img-fluid rounded-3" alt="{{ item.product.name }}">
+                      </div>
+                      <div class="col-md-3 col-lg-3 col-xl-3">
+                        <h6 class="text-muted">{{ item.product.name }}</h6>
+                        <h6 class="mb-0">{{ item.product.description|truncatewords:10 }}</h6>
+                        <form method="POST" class="variant-form mt-2" data-item-id="{{ item.id }}">
+                          {% csrf_token %}
+                          <select name="variant" class="form-select form-select-sm">
+                            {% for code, label in item.VARIANT_CHOICES %}
+                              <option value="{{ code }}" {% if item.variant == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                          </select>
+                        </form>
+                      </div>
+                      <div class="col-md-3 col-lg-3 col-xl-3">
+                        <button class="btn btn-sm btn-outline-secondary me-2 update-quantity" data-id="{{ item.id }}" data-action="decrease">-</button>
+                        <span id="qty-{{ item.id }}">{{ item.quantity }}</span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2 update-quantity" data-id="{{ item.id }}" data-action="increase">+</button>
+                      </div>
+                      <div class="col-md-3 col-lg-2 col-xl-2 offset-lg-1">
+                        <h6 class="mb-0">${{ item.total_price|floatformat:2 }}</h6>
+                      </div>
+                      <div class="col-md-1 col-lg-1 col-xl-1 text-end">
+                        <button class="btn btn-sm btn-danger remove-from-cart" data-item-id="{{ item.id }}">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      </div>
                     </div>
-                    <div class="col-md-3 col-lg-3 col-xl-3">
-                      <h6 class="text-muted">{{ item.product.name }}</h6>
-                      <h6 class="mb-0">{{ item.product.description|truncatewords:10 }}</h6>
-                    </div>
-                    <div class="col-md-3 col-lg-3 col-xl-3">
-                      <button class="btn btn-sm btn-outline-secondary me-2 update-quantity" data-id="{{ item.id }}" data-action="decrease">-</button>
-                      <span id="qty-{{ item.id }}">{{ item.quantity }}</span>
-                      <button class="btn btn-sm btn-outline-secondary ms-2 update-quantity" data-id="{{ item.id }}" data-action="increase">+</button>
-                    </div>
-                    <div class="col-md-3 col-lg-2 col-xl-2 offset-lg-1">
-                      <h6 class="mb-0">${{ item.total_price|floatformat:2 }}</h6>
-                    </div>
-                    <div class="col-md-1 col-lg-1 col-xl-1 text-end">
-                      <button class="btn btn-sm btn-outline-danger remove-from-cart" data-item-id="{{ item.id }}"><i class="fas fa-times"></i></button>
-                    </div>
-                  </div>
-                  <hr class="my-4">
+                    <hr class="my-4">
+                    {% endfor %}
                   {% endfor %}
 
                   <div class="pt-5">
@@ -74,7 +84,6 @@ templates/application/cart.html
                   </div>
 
                   <a href="{% url 'checkout' %}" class="btn btn-dark w-100">Checkout</a>
-
                 </div>
               </div>
 
@@ -89,29 +98,6 @@ templates/application/cart.html
 
 {% block extra_js %}
 <script src="https://js.stripe.com/v3/"></script>
-<script>
-  const baseTotal = parseFloat("{{ total|floatformat:2 }}");
-  const stripe = Stripe("{{ stripe_public_key }}");
-
-  document.getElementById("checkout-button").addEventListener("click", () => {
-    const shipping = parseFloat(document.getElementById("shipping-select").value);
-    const fullTotal = baseTotal + shipping;
-
-    fetch("{% url 'create_checkout_session' %}", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": "{{ csrf_token }}"
-      },
-      body: JSON.stringify({
-        shipping_cost: shipping,
-        total: fullTotal
-      })
-    })
-    .then(res => res.json())
-    .then(data => stripe.redirectToCheckout({ sessionId: data.id }));
-  });
-</script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
   $('.update-quantity').click(function () {
@@ -129,21 +115,38 @@ templates/application/cart.html
       }
     });
   });
-</script>
-<script>
-  async function addToCart(productId) {
-    try {
-      const res = await fetch(`/add-to-cart-ajax/${productId}/`, {
-        method: 'GET',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      });
-      const data = await res.json();
-      if (data.status === 'ok') {
-        document.getElementById("cart-count").textContent = data.count;
+
+  $('.variant-form select').on('change', function () {
+    const form = $(this).closest('form');
+    const itemId = form.data('item-id');
+    const variant = $(this).val();
+
+    $.ajax({
+      url: "{% url 'update_cart_variant' %}",
+      type: "POST",
+      headers: { "X-CSRFToken": "{{ csrf_token }}" },
+      data: { item_id: itemId, variant: variant },
+      success: function () {
+        location.reload();
       }
-    } catch (err) {
-      console.error("Cart add failed", err);
-    }
-  }
+    });
+  });
+
+  $('.remove-from-cart').click(function () {
+    const itemId = $(this).data('item-id');
+
+    $.ajax({
+      url: "/remove-from-cart/",
+      data: { item_id: itemId },
+      method: 'POST',
+      headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+      success: function () {
+        $(`#cart-item-${itemId}`).fadeOut(300, function () { $(this).remove(); });
+      },
+      error: function () {
+        alert('Failed to remove item.');
+      }
+    });
+  });
 </script>
 {% endblock %}
