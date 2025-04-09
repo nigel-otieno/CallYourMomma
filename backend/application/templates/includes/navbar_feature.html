@@ -35,7 +35,7 @@
 
            
         {% if user.is_authenticated %}
-          <li class="nav-item"><a class="nav-link text-light" href="{% url 'account_logout' %}"><i class="bi bi-person-circle fs-5"></i></a></li>
+          <li class="nav-item"><a class="nav-link text-light" href="{% url 'profile' %}"><i class="bi bi-person-circle fs-5"></i></a></li>
         {% else %}
           <li class="nav-item"><a class="btn btn-sm btn-warning px-3" href="{% provider_login_url 'google' %}"><i class="bi bi-google me-1"></i> Login</a></li>
         {% endif %}

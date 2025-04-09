@@ -6,11 +6,16 @@ import stripe
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
+from django.contrib.auth.decorators import login_required
 import json
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.contrib.auth import get_user_model
+from .forms import *
+from django.contrib import messages
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+User = get_user_model()
 
 def home_view(request):
     products = Product.objects.all()[:3]
@@ -29,6 +34,7 @@ def success_view(request):
         session = stripe.checkout.Session.retrieve(session_id)
         customer = session.get("customer_details", {})
         address = customer.get("address", {})
+        cart_id = session["metadata"].get("cart_id")
 
         request.session["checkout_info"] = {
             "name": customer.get("name"),
@@ -41,6 +47,7 @@ def success_view(request):
                 "postal_code": address.get("postal_code"),
                 "country": address.get("country"),
             },
+            "cart_id": cart_id,  # ✅ Track the cart used for checkout
         }
 
     except Exception as e:
@@ -49,14 +56,150 @@ def success_view(request):
 
     return redirect("thank_you")
 
+@csrf_exempt
+def create_checkout_session(request):
+    cart = get_user_cart(request)
 
+    # ✅ Ensure cart is linked to user
+    if request.user.is_authenticated:
+        cart.user = request.user
+        cart.save()
+        print("🛒 Cart linked to:", cart.user)
+
+    cart_items = CartItem.objects.filter(cart=cart)
+
+    line_items = [
+        {
+            'price_data': {
+                'currency': 'usd',
+                'unit_amount': int(item.product.price * 100),
+                'product_data': {
+                    'name': f"{item.product.name} - {item.get_variant_display()}",
+                },
+            },
+            'quantity': item.quantity,
+        }
+        for item in cart_items
+    ]
+
+    session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=line_items,
+        mode='payment',
+        success_url=f"http://localhost:8000/success/?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url='http://localhost:8000/cancel/',
+        shipping_address_collection={
+            'allowed_countries': ['US', 'CA']
+        },
+        metadata={
+            'cart_id': str(cart.id),
+        }
+    )
+
+    return JsonResponse({'id': session.id})
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return HttpResponse(status=400)
+
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        cart_id = session['metadata'].get('cart_id')
+
+        print("✅ Webhook received for cart:", cart_id)
+
+        try:
+            cart = Cart.objects.get(id=cart_id)
+            cart_items = CartItem.objects.filter(cart=cart)
+
+            if not cart.user:
+                print("❌ Cannot create Order – cart has no user!")
+                return HttpResponse(status=200)
+
+            if not hasattr(cart, 'order'):
+                order = Order.objects.create(
+                    cart=cart,
+                    full_name=session['customer_details']['name'],
+                    email=session['customer_details']['email'],
+                    address=json.dumps(session['customer_details']['address']),
+                    paid=True,
+                    stripe_session_id=session['id'],
+                )
+                print("✅ Order saved:", order)
+
+                # ✅ Create a fresh cart for next session
+                Cart.objects.create(user=cart.user)
+
+            # ✅ Create a new cart for the user so future orders are allowed
+            if cart.user:
+                new_cart = Cart.objects.create(user=cart.user, session_key=cart.session_key)
+                print(f"🆕 New cart created for {cart.user} → ID {new_cart.id}")
+
+
+            if cart.user.email:
+                message = render_to_string('application/email_receipt.html', {
+                    'user': cart.user,
+                    'cart_items': cart_items,
+                    'total': sum(item.total_price for item in cart_items)
+                })
+                send_mail(
+                    subject='Your CallYourMomma Order Confirmation',
+                    message='',
+                    from_email='noreply@callyourmomma.com',
+                    recipient_list=[cart.user.email],
+                    html_message=message
+                )
+
+        except Cart.DoesNotExist:
+            print("❌ Cart not found:", cart_id)
+            return HttpResponse(status=404)
+
+    return HttpResponse(status=200)
+
+
+@login_required
+def profile_view(request):
+    user = request.user
+
+    # 🔍 Debug logs
+    print("🔐 Authenticated as:", user)
+    print("🧾 All Orders:")
+    for order in Order.objects.all():
+        print("•", order.id, "→", order.cart.user)
+
+    orders = Order.objects.filter(cart__user=user).order_by('-created_at')
+    print("✅ Filtered Orders:", orders)
+
+    if request.method == 'POST':
+        form = EmailUpdateForm(request.POST, instance=user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Email updated successfully.")
+            return redirect('profile')
+    else:
+        form = EmailUpdateForm(instance=user)
+
+    return render(request, 'application/profile.html', {
+        'form': form,
+        'orders': orders
+    })
 
 def cancel_view(request):
     return render(request, 'application/cancel.html')
 
 def thank_you_view(request):
     info = request.session.get("checkout_info", {})
-    cart = get_user_cart(request)
+    cart_id = info.get("cart_id")
+
+    cart = get_object_or_404(Cart, id=cart_id)
     cart_items = CartItem.objects.filter(cart=cart)
 
     items = [
@@ -77,21 +220,26 @@ def thank_you_view(request):
         "total": total,
     }
 
-    # optionally clear cart items now that the order is shown
-    cart_items.delete()
-
     return render(request, "application/thank_you.html", context)
 
 def get_user_cart(request):
     if request.user.is_authenticated:
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+        # ✅ Get most recent cart for user
+        cart = Cart.objects.filter(user=request.user).order_by('-created_at').first()
+        if not cart:
+            cart = Cart.objects.create(user=request.user, session_key=request.session.session_key or "")
+        return cart
     else:
         session_key = request.session.session_key
         if not session_key:
             request.session.create()
             session_key = request.session.session_key
-        cart, _ = Cart.objects.get_or_create(session_key=session_key, user=None)
-    return cart
+        cart = Cart.objects.filter(session_key=session_key, user=None).order_by('-created_at').first()
+        if not cart:
+            cart = Cart.objects.create(session_key=session_key)
+        return cart
+
+
 
 @require_POST
 def add_to_cart(request, product_id):
@@ -129,41 +277,6 @@ def checkout_view(request):
         'stripe_public_key': settings.STRIPE_PUBLIC_KEY
     })
 
-@csrf_exempt
-def create_checkout_session(request):
-    cart = get_user_cart(request)
-    cart_items = CartItem.objects.filter(cart=cart)
-
-    line_items = [
-        {
-            'price_data': {
-                'currency': 'usd',
-                'unit_amount': int(item.product.price * 100),
-                'product_data': {
-                    'name': f"{item.product.name} - {item.get_variant_display()}",
-                },
-            },
-            'quantity': item.quantity,
-        }
-        for item in cart_items
-    ]
-
-    session = stripe.checkout.Session.create(
-        payment_method_types=['card'],
-        line_items=line_items,
-        mode='payment',
-        success_url=f"http://localhost:8000/success/?session_id={{CHECKOUT_SESSION_ID}}",  # ✅ Stripe replaces this
-        cancel_url='http://localhost:8000/cancel/',
-        shipping_address_collection={
-            'allowed_countries': ['US', 'CA']
-        },
-        metadata={
-            'cart_id': str(cart.id),
-        }
-    )
-
-    return JsonResponse({'id': session.id})
-
 @require_POST
 def update_cart_quantity(request):
     item_id = request.POST.get('item_id')
@@ -180,44 +293,7 @@ def update_cart_quantity(request):
     except CartItem.DoesNotExist:
         return JsonResponse({'status': 'error'}, status=404)
 
-@csrf_exempt
-def stripe_webhook(request):
-    payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
-    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except (ValueError, stripe.error.SignatureVerificationError):
-        return HttpResponse(status=400)
-
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        cart_id = session['metadata'].get('cart_id')
-        try:
-            cart = Cart.objects.get(id=cart_id)
-            cart_items = CartItem.objects.filter(cart=cart)
-
-            if cart.user and cart.user.email:
-                message = render_to_string('application/email_receipt.html', {
-                    'user': cart.user,
-                    'cart_items': cart_items,
-                    'total': sum(item.total_price for item in cart_items)
-                })
-                send_mail(
-                    subject='Your CallYourMomma Order Confirmation',
-                    message='',
-                    from_email='noreply@callyourmomma.com',
-                    recipient_list=[cart.user.email],
-                    html_message=message
-                )
-
-            cart_items.delete()
-
-        except Cart.DoesNotExist:
-            return HttpResponse(status=404)
-
-    return HttpResponse(status=200)
 
 def cart_count_api(request):
     user = request.user if request.user.is_authenticated else None

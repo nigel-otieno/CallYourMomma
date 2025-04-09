@@ -1,0 +1,127 @@
+{% extends "application/base.html" %}
+{% load static %}
+{% load humanize %}
+{% load json_utils %}
+
+{% block content %}
+<!-- Profile HTML starts here -->
+<section class="bg-light py-3 py-md-5 py-xl-8">
+  <div class="container">
+    <!-- Heading -->
+    <div class="row justify-content-md-center">
+      <div class="col-12 col-md-10 col-lg-8 col-xl-7 col-xxl-6">
+        <h2 class="mb-4 display-5 text-center">Profile</h2>
+        <p class="text-secondary text-center lead fs-4 mb-5">
+          This is your personal profile dashboard.
+        </p>
+        <hr class="w-50 mx-auto mb-5 mb-xl-9 border-dark-subtle">
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row gy-4 gy-lg-0">
+      <!-- Left Sidebar -->
+      <div class="col-12 col-lg-4 col-xl-3">
+        <div class="card widget-card border-light shadow-sm">
+          <div class="card-header text-bg-primary">Welcome, {{ user.first_name }} {{ user.last_name }}</div>
+          <div class="card-body text-center">
+            <h5 class="mb-1">{{ user.get_full_name }}</h5>
+            <p class="text-secondary mb-4">{{ user.email }}</p>
+            <div class="d-grid">
+              <a class="btn btn-outline-primary" href="{% url 'account_logout' %}">Logout</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="col-12 col-lg-8 col-xl-9">
+        <div class="card widget-card border-light shadow-sm">
+          <div class="card-body p-4">
+            <ul class="nav nav-tabs" id="profileTab" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="email-tab" data-bs-toggle="tab" data-bs-target="#email" type="button" role="tab">Edit Profile</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="password-tab" data-bs-toggle="tab" data-bs-target="#password" type="button" role="tab">Change Password</button>
+              </li>
+            </ul>
+            <div class="tab-content pt-4">
+              <!-- Overview -->
+              <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                <h5>Past Orders</h5>
+                {% if orders %}
+                <div class="accordion" id="profileOrderAccordion">
+                  {% for order in orders %}
+                  <div class="accordion-item mb-3">
+                    <h2 class="accordion-header" id="heading{{ order.id }}">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ order.id }}" aria-expanded="false" aria-controls="collapse{{ order.id }}">
+                        Order #{{ order.id }} – {{ order.created_at|date:"M d, Y" }} – ${{ order.cart.total_price }}
+                      </button>
+                    </h2>
+                    <div id="collapse{{ order.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ order.id }}" data-bs-parent="#profileOrderAccordion">
+                      <div class="accordion-body">
+                        <p><strong>Email:</strong> {{ order.email }}</p>
+                        <p><strong>Shipping Address:</strong><br>
+                            {% with addr=order.address|parse_json %}
+                            {{ addr.line1|default_if_none:'' }},
+                            {{ addr.city }},
+                            {{ addr.state }} {{ addr.postal_code }},
+                            {{ addr.country }}
+                          {% endwith %}
+                          
+                        </p>
+                        <ul class="list-group mt-3">
+                          {% for item in order.cart.items.all %}
+                          <li class="list-group-item d-flex justify-content-between">
+                            <span>{{ item.product.name }} ({{ item.get_variant_display }}) × {{ item.quantity }}</span>
+                            <span>${{ item.total_price }}</span>
+                          </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No orders found.</p>
+                {% endif %}
+              </div>
+
+              <!-- Profile Update -->
+              <div class="tab-pane fade" id="email" role="tabpanel">
+                <form method="post" class="row g-3">
+                  {% csrf_token %}
+                  {{ form.non_field_errors }}
+                  <div class="col-md-6">
+                    {{ form.first_name.label_tag }}{{ form.first_name }}
+                  </div>
+                  <div class="col-md-6">
+                    {{ form.last_name.label_tag }}{{ form.last_name }}
+                  </div>
+                  <div class="col-md-12">
+                    {{ form.email.label_tag }}{{ form.email }}
+                  </div>
+                  <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Password Change -->
+              <div class="tab-pane fade" id="password" role="tabpanel">
+                <a href="{% url 'account_change_password' %}" class="btn btn-warning">Change Password</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
